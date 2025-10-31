@@ -46,7 +46,8 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Build Docker Image
-        run: docker build -f Dockerfile -t pygoat_app:latest .
+        working-directory: ./
+        run: docker build -f ./Dockerfile -t pygoat_app:latest .
 
       - name: Docker Scout Scan
         uses: docker/scout-action@v1.15.0

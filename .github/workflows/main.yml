@@ -1,30 +1,53 @@
-name: Build Image and Run Image Scan
-
+name: build
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
   pull_request:
-    branches: [ main ]
 
 jobs:
-  image_scan:
-    name: Build Image and Run Image Scan
+  # ---------- Static Code Scan (Part 1) ----------
+  sast_scan:
+    name: Run Static Code Scan
     runs-on: ubuntu-latest
-
     steps:
-      # Step 1: Checkout repository
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Step 2: Set up Docker Buildx
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # Step 3: Build Docker Image
+      - name: Run Trivy vulnerability scanner in repo mode
+        uses: aquasecurity/trivy-action@0.28.0
+        env:
+          TRIVY_DB_REPOSITORY: public.ecr.aws/aquasecurity/trivy-db:2
+        with:
+          scan-type: 'fs'
+          ignore-unfixed: true
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL'
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-results
+          path: trivy-results.sarif
+
+  # ---------- Container Image Scan (Part 2) ----------
+  image_scan:
+    name: Build Image and Run Image Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Build Docker Image
         run: docker build -f Dockerfile -t pygoat_app:latest .
 
-      # Step 4: Docker Scout Scan
       - name: Docker Scout Scan
         uses: docker/scout-action@v1.15.0
         with:
@@ -34,10 +57,9 @@ jobs:
           only-severities: critical,high
           sarif-file: scout-report.sarif
 
-      # Step 5: Upload Artifact
       - name: Upload Artifact
-        if: always()
         uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: docker-scout-findings
           path: scout-report.sarif
